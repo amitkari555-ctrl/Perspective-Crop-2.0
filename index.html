@@ -1,0 +1,2165 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>फोटो क्रॉप (ज़ूम व पैन सहित), मर्जर, PDF व प्रिंट</title>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Google Fonts: Hind & Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Hind:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- jsPDF CDN for PDF Export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+  <style>
+    body {
+      font-family: 'Hind', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* Strict Touch Action for smooth mobile dragging & zooming */
+    .touch-strict-none {
+      touch-action: none !important;
+      -webkit-touch-callout: none !important;
+      -webkit-user-select: none !important;
+      user-select: none !important;
+    }
+
+    /* Print Formatting: Only print high quality photo canvas */
+    @media print {
+      body {
+        background: #ffffff !important;
+        margin: 0 !important;
+        padding: 0 !important;
+      }
+      body * {
+        visibility: hidden !important;
+      }
+      #printContainer, #printContainer * {
+        visibility: visible !important;
+      }
+      #printContainer {
+        position: fixed !important;
+        left: 0 !important;
+        top: 0 !important;
+        width: 100vw !important;
+        height: 100vh !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        background: #ffffff !important;
+      }
+      #printContainer img {
+        max-width: 95% !important;
+        max-height: 95vh !important;
+        object-fit: contain !important;
+      }
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen flex flex-col antialiased selection:bg-amber-200">
+
+  <!-- Header Bar -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+    <div class="max-w-7xl mx-auto px-3 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between gap-2">
+      <div class="flex items-center gap-2.5">
+        <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr from-amber-500 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-amber-200 flex-shrink-0">
+          <i data-lucide="crop" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h1 class="text-sm sm:text-base font-bold text-slate-900 leading-tight">फोटो मर्जर व स्मार्ट क्रॉप टूल</h1>
+          <p class="text-[11px] sm:text-xs text-slate-500 hidden sm:block">ज़ूम व पैन • नॉर्मल व पर्सपेक्टिव क्रॉप • आधार/ID कार्ड • PDF व प्रिंट</p>
+        </div>
+      </div>
+
+      <!-- Quick Export Actions -->
+      <div class="flex items-center gap-1.5 sm:gap-2">
+        <button onclick="openPdfModal()" class="inline-flex items-center gap-1 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white text-xs font-semibold px-2.5 sm:px-3.5 py-2 rounded-xl transition shadow-sm cursor-pointer">
+          <i data-lucide="file-text" class="w-4 h-4"></i>
+          <span>PDF</span>
+        </button>
+        <button onclick="triggerDirectPrint()" class="inline-flex items-center gap-1 bg-slate-900 hover:bg-slate-800 active:scale-95 text-white text-xs font-semibold px-2.5 sm:px-3.5 py-2 rounded-xl transition shadow-sm cursor-pointer">
+          <i data-lucide="printer" class="w-4 h-4"></i>
+          <span>प्रिंट</span>
+        </button>
+        <button onclick="downloadMergedImage('jpg')" class="inline-flex items-center gap-1 bg-amber-600 hover:bg-amber-700 active:scale-95 text-white text-xs font-semibold px-2.5 sm:px-3.5 py-2 rounded-xl transition shadow-sm cursor-pointer">
+          <i data-lucide="download" class="w-4 h-4"></i>
+          <span>JPG</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+
+  <main class="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-6 lg:p-8 space-y-4 sm:space-y-6">
+
+    <!-- Feature Info Badge -->
+    <div class="bg-indigo-50 border border-indigo-200/80 rounded-xl p-3 sm:p-3.5 text-xs text-indigo-900 flex items-start gap-2.5">
+      <i data-lucide="zoom-in" class="w-4 h-4 text-indigo-600 flex-shrink-0 mt-0.5"></i>
+      <div class="leading-relaxed">
+        <strong>नया फीचर - क्रॉप करते समय ज़ूम (Zoom & Pan):</strong> अब क्रॉप डायलॉग में आप फोटो को <strong>500% तक ज़ूम</strong> कर सकते हैं और हाथ (Pan) टूल से खिसकाकर बिल्कुल बारीक किनारों और कोनों को सटीकता से सेट कर सकते हैं।
+      </div>
+    </div>
+
+    <!-- Dual Photo Slots -->
+    <section class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+
+      <!-- Photo 1 Box -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-sm flex flex-col justify-between">
+        <div>
+          <div class="flex items-center justify-between mb-2.5">
+            <span class="inline-flex items-center gap-1.5 text-indigo-700 font-bold text-xs bg-indigo-50 px-3 py-1 rounded-full border border-indigo-100">
+              <i data-lucide="image" class="w-3.5 h-3.5"></i> फोटो 1 (आगे का भाग / Front)
+            </span>
+            <span id="p1Status" class="hidden text-xs text-emerald-600 font-semibold flex items-center gap-1">
+              <i data-lucide="check-circle" class="w-3.5 h-3.5"></i> तैयार
+            </span>
+          </div>
+
+          <div id="p1DropArea" class="relative rounded-xl border-2 border-dashed border-slate-300 hover:border-indigo-400 bg-slate-50/80 aspect-[4/3] flex flex-col items-center justify-center p-2 overflow-hidden transition">
+            <div id="p1EmptyState" class="flex flex-col items-center justify-center text-center p-3">
+              <div class="w-12 h-12 mb-2 rounded-2xl bg-indigo-100 text-indigo-600 flex items-center justify-center">
+                <i data-lucide="camera" class="w-6 h-6"></i>
+              </div>
+              <p class="text-xs sm:text-sm font-semibold text-slate-700">फोटो 1 चुनें या फोटो खींचें</p>
+              <p class="text-[11px] text-slate-400 mt-0.5">आधार / पहचान पत्र / दस्तावेज़ (आगे)</p>
+            </div>
+            <img id="p1Preview" class="hidden w-full h-full object-contain rounded-lg shadow-sm" alt="Photo 1">
+          </div>
+        </div>
+
+        <div class="mt-3 pt-3 border-t border-slate-100 flex flex-wrap gap-2 items-center justify-between">
+          <div class="flex gap-1.5">
+            <label class="cursor-pointer inline-flex items-center gap-1 px-3 py-2 bg-indigo-50 hover:bg-indigo-100 active:scale-95 text-indigo-700 text-xs font-semibold rounded-xl transition">
+              <i data-lucide="upload" class="w-3.5 h-3.5"></i> अपलोड
+              <input type="file" id="p1Input" accept="image/*" class="hidden" onchange="handleFileSelect(event, 1)">
+            </label>
+            <button onclick="startCamera(1)" class="inline-flex items-center gap-1 px-3 py-2 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 text-xs font-semibold rounded-xl transition cursor-pointer">
+              <i data-lucide="camera" class="w-3.5 h-3.5"></i> कैमरा
+            </button>
+          </div>
+
+          <div class="flex gap-1.5">
+            <button id="p1RotateBtn" onclick="rotatePhoto(1)" disabled class="disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1 px-2.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition cursor-pointer" title="90° घुमाएं">
+              <i data-lucide="rotate-cw" class="w-3.5 h-3.5"></i> 90°
+            </button>
+            <button id="p1CropBtn" onclick="launchCropperModal(1)" disabled class="disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1.5 px-3 py-2 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white text-xs font-bold rounded-xl transition shadow-sm cursor-pointer">
+              <i data-lucide="crop" class="w-3.5 h-3.5"></i> क्रॉप व ज़ूम
+            </button>
+            <button id="p1RemoveBtn" onclick="clearSlot(1)" class="hidden text-xs text-rose-500 hover:text-rose-700 p-2 rounded-xl hover:bg-rose-50 transition cursor-pointer" title="हटाएं">
+              <i data-lucide="trash-2" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Photo 2 Box -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-sm flex flex-col justify-between">
+        <div>
+          <div class="flex items-center justify-between mb-2.5">
+            <span class="inline-flex items-center gap-1.5 text-blue-700 font-bold text-xs bg-blue-50 px-3 py-1 rounded-full border border-blue-100">
+              <i data-lucide="image" class="w-3.5 h-3.5"></i> फोटो 2 (पीछे का भाग / Back)
+            </span>
+            <span id="p2Status" class="hidden text-xs text-emerald-600 font-semibold flex items-center gap-1">
+              <i data-lucide="check-circle" class="w-3.5 h-3.5"></i> तैयार
+            </span>
+          </div>
+
+          <div id="p2DropArea" class="relative rounded-xl border-2 border-dashed border-slate-300 hover:border-blue-400 bg-slate-50/80 aspect-[4/3] flex flex-col items-center justify-center p-2 overflow-hidden transition">
+            <div id="p2EmptyState" class="flex flex-col items-center justify-center text-center p-3">
+              <div class="w-12 h-12 mb-2 rounded-2xl bg-blue-100 text-blue-600 flex items-center justify-center">
+                <i data-lucide="camera" class="w-6 h-6"></i>
+              </div>
+              <p class="text-xs sm:text-sm font-semibold text-slate-700">फोटो 2 चुनें या फोटो खींचें</p>
+              <p class="text-[11px] text-slate-400 mt-0.5">आधार / पहचान पत्र (पीछे का भाग)</p>
+            </div>
+            <img id="p2Preview" class="hidden w-full h-full object-contain rounded-lg shadow-sm" alt="Photo 2">
+          </div>
+        </div>
+
+        <div class="mt-3 pt-3 border-t border-slate-100 flex flex-wrap gap-2 items-center justify-between">
+          <div class="flex gap-1.5">
+            <label class="cursor-pointer inline-flex items-center gap-1 px-3 py-2 bg-blue-50 hover:bg-blue-100 active:scale-95 text-blue-700 text-xs font-semibold rounded-xl transition">
+              <i data-lucide="upload" class="w-3.5 h-3.5"></i> अपलोड
+              <input type="file" id="p2Input" accept="image/*" class="hidden" onchange="handleFileSelect(event, 2)">
+            </label>
+            <button onclick="startCamera(2)" class="inline-flex items-center gap-1 px-3 py-2 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 text-xs font-semibold rounded-xl transition cursor-pointer">
+              <i data-lucide="camera" class="w-3.5 h-3.5"></i> कैमरा
+            </button>
+          </div>
+
+          <div class="flex gap-1.5">
+            <button id="p2RotateBtn" onclick="rotatePhoto(2)" disabled class="disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1 px-2.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition cursor-pointer" title="90° घुमाएं">
+              <i data-lucide="rotate-cw" class="w-3.5 h-3.5"></i> 90°
+            </button>
+            <button id="p2CropBtn" onclick="launchCropperModal(2)" disabled class="disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1.5 px-3 py-2 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white text-xs font-bold rounded-xl transition shadow-sm cursor-pointer">
+              <i data-lucide="crop" class="w-3.5 h-3.5"></i> क्रॉप व ज़ूम
+            </button>
+            <button id="p2RemoveBtn" onclick="clearSlot(2)" class="hidden text-xs text-rose-500 hover:text-rose-700 p-2 rounded-xl hover:bg-rose-50 transition cursor-pointer" title="हटाएं">
+              <i data-lucide="trash-2" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- Merge Settings & Preview Section -->
+    <section class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div class="p-4 sm:p-5 border-b border-slate-200 bg-slate-50/70">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 class="text-sm sm:text-base font-bold text-slate-900 flex items-center gap-2">
+              <i data-lucide="sliders" class="w-4 h-4 text-indigo-600"></i>
+              मर्ज सेटिंग्स (दोनों फोटो जोड़ें)
+            </h2>
+            <p class="text-xs text-slate-500">दोनों फोटो को एक साथ व्यवस्थित करने की शैली चुनें</p>
+          </div>
+
+          <button onclick="swapSlots()" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-50 rounded-xl text-xs font-semibold text-slate-700 shadow-sm transition active:scale-95 cursor-pointer">
+            <i data-lucide="arrow-left-right" class="w-3.5 h-3.5 text-indigo-600"></i>
+            फोटो 1 ⇄ 2 बदलें
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mt-4">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">जोड़ने की दिशा</label>
+            <div class="grid grid-cols-3 gap-1 bg-slate-200 p-1 rounded-xl text-xs font-semibold">
+              <button type="button" onclick="setMergeLayout('horizontal')" id="btnHorizontal" class="py-1.5 rounded-lg transition bg-white text-indigo-600 shadow-sm flex items-center justify-center gap-1 cursor-pointer font-bold">
+                अगल-बगल
+              </button>
+              <button type="button" onclick="setMergeLayout('vertical')" id="btnVertical" class="py-1.5 rounded-lg transition text-slate-600 hover:text-slate-900 flex items-center justify-center gap-1 cursor-pointer font-semibold">
+                ऊपर-नीचे
+              </button>
+              <button type="button" onclick="setMergeLayout('idcard')" id="btnIdCard" class="py-1.5 rounded-lg transition text-slate-600 hover:text-slate-900 flex items-center justify-center gap-1 cursor-pointer font-semibold">
+                ID कार्ड
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <div class="flex justify-between items-center mb-1">
+              <label for="spacingRange" class="text-xs font-bold text-slate-700">दूरी (Spacing)</label>
+              <span id="spacingDisplay" class="text-[11px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">16 px</span>
+            </div>
+            <input type="range" id="spacingRange" min="0" max="60" value="16" class="w-full h-2 bg-slate-200 rounded-lg cursor-pointer accent-indigo-600" oninput="updateMergeSettings()">
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">बैकग्राउंड रंग</label>
+            <div class="flex items-center gap-2">
+              <input type="color" id="bgPicker" value="#ffffff" onchange="updateMergeSettings()" class="w-8 h-8 rounded-lg border border-slate-300 cursor-pointer bg-white p-0.5">
+              <div class="flex gap-1">
+                <button onclick="quickBg('#ffffff')" class="w-6 h-6 rounded-md border border-slate-300 bg-white" title="सफेद"></button>
+                <button onclick="quickBg('#f1f5f9')" class="w-6 h-6 rounded-md border border-slate-300 bg-slate-100" title="हल्का ग्रे"></button>
+                <button onclick="quickBg('#0f172a')" class="w-6 h-6 rounded-md border border-slate-700 bg-slate-900" title="काला"></button>
+                <button onclick="quickBg('transparent')" class="w-6 h-6 rounded-md border border-slate-300 bg-[radial-gradient(#999_1px,transparent_1px)] [background-size:4px_4px]" title="पारदर्शी"></button>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div class="flex justify-between items-center mb-1">
+              <label for="radiusRange" class="text-xs font-bold text-slate-700">कोने गोल (Radius)</label>
+              <span id="radiusDisplay" class="text-[11px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">0 px</span>
+            </div>
+            <input type="range" id="radiusRange" min="0" max="40" value="0" class="w-full h-2 bg-slate-200 rounded-lg cursor-pointer accent-indigo-600" oninput="updateMergeSettings()">
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Merged Output Canvas -->
+      <div class="p-4 sm:p-6 flex flex-col items-center justify-center bg-slate-50/50 min-h-[320px]">
+        <div id="noPhotosPrompt" class="text-center py-10 px-4 max-w-sm">
+          <div class="w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-500 mx-auto flex items-center justify-center mb-2">
+            <i data-lucide="layers" class="w-7 h-7"></i>
+          </div>
+          <h3 class="text-sm font-bold text-slate-800">फ़ोटो अभी अपलोड नहीं हैं</h3>
+          <p class="text-xs text-slate-500 mt-1">ऊपर दिए गए बॉक्स में फोटो 1 और फोटो 2 चुनें। दोनों जुड़कर यहाँ दिखाई देंगे।</p>
+        </div>
+
+        <div id="mergedCanvasWrapper" class="hidden relative max-w-full overflow-auto p-2 sm:p-4 rounded-xl border border-slate-200 shadow-inner bg-slate-200/60 flex justify-center items-center">
+          <canvas id="outputMergeCanvas" class="max-w-full h-auto rounded-lg shadow-md border border-slate-300"></canvas>
+        </div>
+
+        <div id="mergedActionToolbar" class="hidden mt-4 w-full flex flex-wrap items-center justify-center gap-2 sm:gap-3">
+          <button onclick="launchCropperModal('merged')" class="inline-flex items-center gap-1.5 px-3.5 py-2.5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white rounded-xl text-xs sm:text-sm font-bold shadow transition cursor-pointer">
+            <i data-lucide="crop" class="w-4 h-4"></i>
+            मर्ज फोटो को क्रॉप करें
+          </button>
+          <button onclick="openPdfModal()" class="inline-flex items-center gap-1.5 px-4 py-2.5 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white rounded-xl text-xs sm:text-sm font-bold shadow transition cursor-pointer">
+            <i data-lucide="file-text" class="w-4 h-4"></i>
+            PDF डाउनलोड
+          </button>
+          <button onclick="triggerDirectPrint()" class="inline-flex items-center gap-1.5 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 active:scale-95 text-white rounded-xl text-xs sm:text-sm font-bold shadow transition cursor-pointer">
+            <i data-lucide="printer" class="w-4 h-4"></i>
+            प्रिंट
+          </button>
+          <button onclick="downloadMergedImage('jpg')" class="inline-flex items-center gap-1 px-3.5 py-2.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-xl text-xs sm:text-sm font-bold shadow transition cursor-pointer">
+            <i data-lucide="download" class="w-4 h-4"></i>
+            JPG सेव करें
+          </button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+
+  <!-- =========================================================================
+       UNIFIED CROP MODAL: NORMAL / PERSPECTIVE WITH LIVE ZOOM & PAN
+  ========================================================================= -->
+  <div id="cropModal" class="fixed inset-0 z-50 bg-black/95 backdrop-blur-md hidden flex flex-col overflow-hidden touch-strict-none select-none">
+    
+    <!-- Top Modal Header -->
+    <div class="px-3 sm:px-4 py-2 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800 flex-shrink-0">
+      <div class="flex items-center gap-2">
+        <span id="cropModalIcon" class="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold">
+          <i data-lucide="crop" class="w-4 h-4"></i>
+        </span>
+        <div>
+          <h3 id="cropModalHeading" class="text-xs sm:text-sm font-bold text-white leading-tight">फोटो क्रॉप टूल</h3>
+          <p id="cropModalSubHeading" class="text-[10px] text-slate-400">ज़ूम करें, पैन करें और सटीक कटिंग करें</p>
+        </div>
+      </div>
+      <button onclick="closeCropModal()" class="text-slate-400 hover:text-white p-1 rounded-lg cursor-pointer">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+    </div>
+
+    <!-- Mode Selector & Aspect Ratios Strip -->
+    <div class="px-3 py-1.5 bg-slate-900 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs flex-shrink-0">
+      
+      <!-- MODE TOGGLE CHECKBOX -->
+      <label class="flex items-center gap-1.5 cursor-pointer bg-slate-800 hover:bg-slate-700/80 px-2.5 py-1.5 rounded-xl border border-amber-500/40 select-none">
+        <input type="checkbox" id="perspectiveModeCheckbox" onchange="toggleCropMode(this.checked)" class="w-4 h-4 rounded text-amber-500 focus:ring-amber-500 border-slate-600 accent-amber-500 cursor-pointer">
+        <span class="font-bold text-amber-300 text-[11px] sm:text-xs flex items-center gap-1">
+          <i data-lucide="box" class="w-3.5 h-3.5 text-amber-400"></i>
+          पर्सपेक्टिव क्रॉप (4-कॉर्नर सीधा करें)
+        </span>
+      </label>
+
+      <!-- Aspect Ratio / Sizing Options -->
+      <div id="aspectRatioGroup" class="flex items-center gap-1 flex-wrap">
+        <span class="text-[11px] text-slate-400 font-semibold mr-0.5">अनुपात:</span>
+        <button onclick="setCropRatio('free')" id="rBtnFree" class="px-2 py-0.5 rounded bg-indigo-600 text-white font-bold text-xs cursor-pointer">फ्री</button>
+        <button onclick="setCropRatio('1:1')" id="rBtn11" class="px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 text-xs font-semibold cursor-pointer">1:1</button>
+        <button onclick="setCropRatio('idcard')" id="rBtnId" class="px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 text-xs font-semibold cursor-pointer">ID / आधार</button>
+        <button onclick="setCropRatio('4:3')" id="rBtn43" class="px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 text-xs font-semibold cursor-pointer">4:3</button>
+        <button onclick="setCropRatio('a4')" id="rBtnA4" class="px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 text-xs font-semibold cursor-pointer">A4</button>
+      </div>
+
+      <div class="flex items-center gap-1">
+        <button onclick="resetCropSelection(0.08)" class="px-2 py-1 bg-slate-800 border border-slate-700 hover:bg-slate-700 rounded text-slate-300 text-[11px] font-semibold cursor-pointer">
+          रीसेट बॉक्स
+        </button>
+        <button onclick="resetCropSelection(0.0)" class="px-2 py-1 bg-slate-800 border border-slate-700 hover:bg-slate-700 rounded text-slate-300 text-[11px] font-semibold cursor-pointer">
+          पूरा फोटो
+        </button>
+      </div>
+    </div>
+
+    <!-- DEDICATED ZOOM & PAN TOOLBAR -->
+    <div class="px-3 py-1.5 bg-slate-950/90 border-b border-slate-800/80 flex items-center justify-between gap-2 text-xs flex-shrink-0">
+      <div class="flex items-center gap-1.5">
+        <button onclick="stepZoom(-0.25)" class="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center font-bold text-sm cursor-pointer" title="ज़ूम आउट (-)">
+          <i data-lucide="zoom-out" class="w-3.5 h-3.5"></i>
+        </button>
+
+        <input type="range" id="zoomSlider" min="1" max="5" step="0.05" value="1" oninput="onZoomSliderChange(this.value)" class="w-20 sm:w-32 h-1.5 bg-slate-700 rounded-lg cursor-pointer accent-amber-500">
+
+        <button onclick="stepZoom(0.25)" class="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center font-bold text-sm cursor-pointer" title="ज़ूम इन (+)">
+          <i data-lucide="zoom-in" class="w-3.5 h-3.5"></i>
+        </button>
+
+        <span id="zoomLevelDisplay" class="text-[11px] font-mono text-amber-400 font-bold ml-1 w-12">100%</span>
+
+        <button onclick="resetZoomAndPan()" class="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-medium border border-slate-700 cursor-pointer">
+          फ़िट (1x)
+        </button>
+      </div>
+
+      <!-- Pan Tool Toggle -->
+      <div class="flex items-center gap-1">
+        <button id="panToolBtn" onclick="togglePanTool()" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-[11px] font-semibold transition cursor-pointer">
+          <i data-lucide="hand" class="w-3.5 h-3.5"></i>
+          <span>पैन (फोटो खिसकाएं)</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Interactive Canvas Viewport -->
+    <div id="cropWorkspace" class="flex-1 bg-neutral-950 relative flex items-center justify-center overflow-hidden touch-strict-none select-none">
+      
+      <!-- Canvas Layer -->
+      <canvas id="cropInteractiveCanvas" class="block touch-strict-none shadow-2xl rounded-sm cursor-crosshair"></canvas>
+
+      <!-- Zoom Loupe (Magnifier) for precision pin alignment -->
+      <div id="cornerLoupe" class="hidden absolute pointer-events-none w-28 h-28 rounded-full border-2 border-amber-400 bg-neutral-950 overflow-hidden shadow-2xl z-40">
+        <canvas id="loupeCanvas" class="w-full h-full"></canvas>
+        <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div class="w-3.5 h-3.5 border border-amber-400 rounded-full"></div>
+          <div class="absolute w-full h-[1px] bg-amber-400/50"></div>
+          <div class="absolute h-full w-[1px] bg-amber-400/50"></div>
+        </div>
+      </div>
+
+      <!-- Mode Hint Badge -->
+      <div id="cropModeHint" class="absolute bottom-2 left-1/2 -translate-x-1/2 bg-slate-900/90 backdrop-blur text-indigo-300 border border-indigo-500/40 text-[11px] px-3 py-1 rounded-full pointer-events-none shadow-lg">
+        सामान्य क्रॉप: किनारों व कोनों को खींचकर काटें। ज़ूम के लिए 2 उंगलियों से पिंच करें।
+      </div>
+    </div>
+
+    <!-- Modal Action Buttons -->
+    <div class="px-4 py-2.5 bg-slate-900 border-t border-slate-800 flex items-center justify-between gap-2 flex-shrink-0">
+      <button onclick="closeCropModal()" class="px-4 py-2 border border-slate-700 text-slate-300 hover:bg-slate-800 rounded-xl text-xs font-semibold cursor-pointer">
+        रद्द करें
+      </button>
+
+      <button id="applyCropBtn" onclick="executeActiveCrop()" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs sm:text-sm font-bold shadow-lg active:scale-95 transition cursor-pointer flex items-center gap-1.5">
+        <i data-lucide="check" class="w-4 h-4"></i>
+        <span id="applyCropBtnText">क्रॉप लागू करें (Normal Crop)</span>
+      </button>
+    </div>
+  </div>
+
+
+  <!-- PDF Configuration Modal -->
+  <div id="pdfExportModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-3">
+    <div class="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl">
+      <div class="px-4 py-3 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+        <h3 class="font-bold text-slate-900 text-sm flex items-center gap-2">
+          <i data-lucide="file-text" class="w-4 h-4 text-rose-600"></i> PDF कनवर्ट और डाउनलोड
+        </h3>
+        <button onclick="closePdfModal()" class="text-slate-400 hover:text-slate-700 p-1 rounded-lg cursor-pointer">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <div class="p-4 space-y-3.5">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">पेज का प्रकार (Page Size)</label>
+          <select id="pdfPageFormat" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-medium focus:ring-2 focus:ring-rose-500 outline-none">
+            <option value="a4" selected>A4 (मानक डॉक्युमेंट / फोटो प्रिंट)</option>
+            <option value="4x6">4 × 6 इंच (फोटो पेपर / कार्ड शीट)</option>
+            <option value="letter">US Letter</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">पेज ओरिएंटेशन (Orientation)</label>
+          <div class="grid grid-cols-2 gap-2">
+            <label class="flex items-center gap-2 border border-slate-200 rounded-xl p-2 cursor-pointer hover:bg-slate-50 text-xs">
+              <input type="radio" name="pdfPageOrient" value="portrait" checked class="text-rose-600">
+              <span class="font-medium text-slate-700">पोर्ट्रेट (लंबा)</span>
+            </label>
+            <label class="flex items-center gap-2 border border-slate-200 rounded-xl p-2 cursor-pointer hover:bg-slate-50 text-xs">
+              <input type="radio" name="pdfPageOrient" value="landscape" class="text-rose-600">
+              <span class="font-medium text-slate-700">लैंडस्केप (चौड़ा)</span>
+            </label>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">मार्जिन</label>
+          <select id="pdfPageMargin" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-medium focus:ring-2 focus:ring-rose-500 outline-none">
+            <option value="10" selected>मानक (10 mm)</option>
+            <option value="5">कम मार्जिन (5 mm)</option>
+            <option value="0">फुल पेज (0 mm)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="px-4 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
+        <button onclick="closePdfModal()" class="px-3.5 py-1.5 border border-slate-300 text-slate-700 rounded-xl text-xs font-semibold">
+          रद्द करें
+        </button>
+        <button onclick="executePdfDownload()" class="px-4 py-2 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white rounded-xl text-xs font-bold shadow flex items-center gap-1.5 cursor-pointer">
+          <i data-lucide="download" class="w-3.5 h-3.5"></i> PDF सेव करें
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Camera Dialog -->
+  <div id="webcamModal" class="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm hidden flex items-center justify-center p-3">
+    <div class="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
+      <div class="px-4 py-3 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+        <h3 class="font-bold text-slate-800 text-sm flex items-center gap-1.5">
+          <i data-lucide="camera" class="w-4 h-4 text-indigo-600"></i> लाइव कैमरा
+        </h3>
+        <button onclick="stopCamera()" class="text-slate-400 hover:text-slate-700 p-1 rounded-lg cursor-pointer">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <div class="p-3 bg-slate-950 flex flex-col items-center">
+        <video id="webcamVideo" autoplay playsinline class="w-full rounded-xl aspect-[4/3] object-cover bg-black"></video>
+        <p id="camPermAlert" class="text-xs text-amber-400 mt-2 hidden text-center">कैमरा अनुमति (Camera Permission) प्रदान करें...</p>
+      </div>
+
+      <div class="px-4 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
+        <button onclick="stopCamera()" class="px-3.5 py-1.5 border border-slate-300 text-slate-700 rounded-xl text-xs font-semibold">
+          रद्द करें
+        </button>
+        <button onclick="takeCameraSnapshot()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-xl text-xs font-bold shadow flex items-center gap-1.5 cursor-pointer">
+          <i data-lucide="camera" class="w-3.5 h-3.5"></i> फोटो खींचें
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toastNotification" class="fixed bottom-5 right-5 z-50 bg-slate-900 text-white text-xs sm:text-sm px-4 py-2.5 rounded-xl shadow-2xl transition-all duration-300 opacity-0 pointer-events-none flex items-center gap-2 border border-slate-700">
+    <i data-lucide="check" id="toastIcon" class="w-4 h-4 text-emerald-400"></i>
+    <span id="toastMessage">संदेश</span>
+  </div>
+
+  <!-- Hidden Print Container -->
+  <div id="printContainer" class="hidden">
+    <img id="printDisplayImg" src="" alt="Print Photo">
+  </div>
+
+
+  <script>
+    /* =========================================================================
+       APPLICATION CORE STATE
+    ========================================================================= */
+    const appState = {
+      p1Image: null,
+      p2Image: null,
+      p1DataUrl: null,
+      p2DataUrl: null,
+      mergeLayout: 'horizontal', // 'horizontal' | 'vertical' | 'idcard'
+      spacing: 16,
+      bgColor: '#ffffff',
+      borderRadius: 0,
+
+      // Active Modal State
+      cropTarget: null, // 1 | 2 | 'merged'
+      activeImgObj: null,
+      isPerspectiveMode: false, // Default is false (NORMAL CROP)
+      cropRatio: 'free',        // 'free' | '1:1' | 'idcard' | '4:3' | 'a4'
+
+      // Zoom & Pan System
+      baseScale: 1.0,           // Fits image to container on load
+      zoomFactor: 1.0,          // User zoom factor (1.0x to 5.0x)
+      panX: 0,                  // Pan offset in screen pixels
+      panY: 0,
+      isPanToolActive: false,   // Hand tool toggle
+
+      // Touch Pinch Gesture Tracking
+      activeTouches: new Map(), // pointerId -> {x, y}
+      initialPinchDist: 0,
+      initialPinchZoom: 1.0,
+      initialPanStart: { x: 0, y: 0 },
+
+      // Normal Crop Box Coordinates (Image coordinate space)
+      normalBox: { x: 0, y: 0, w: 0, h: 0 },
+      normalDragType: null,     // 'move' | 'tl' | 'tr' | 'bl' | 'br' | 'tc' | 'bc' | 'ml' | 'mr'
+      dragStartPt: { x: 0, y: 0 },
+      initialBox: { x: 0, y: 0, w: 0, h: 0 },
+
+      // Perspective Corners (4 independent points in image coordinates)
+      perspCorners: [
+        { x: 0, y: 0 }, // 0: Top-Left
+        { x: 0, y: 0 }, // 1: Top-Right
+        { x: 0, y: 0 }, // 2: Bottom-Right
+        { x: 0, y: 0 }  // 3: Bottom-Left
+      ],
+      activePerspCornerIdx: -1,
+
+      // Pan dragging state
+      isPanningActive: false,
+      panStartClient: { x: 0, y: 0 },
+
+      // Camera State
+      camStream: null,
+      camTargetSlot: null
+    };
+
+    // DOM References
+    const p1Preview = document.getElementById('p1Preview');
+    const p1EmptyState = document.getElementById('p1EmptyState');
+    const p1CropBtn = document.getElementById('p1CropBtn');
+    const p1RotateBtn = document.getElementById('p1RotateBtn');
+    const p1RemoveBtn = document.getElementById('p1RemoveBtn');
+    const p1Status = document.getElementById('p1Status');
+
+    const p2Preview = document.getElementById('p2Preview');
+    const p2EmptyState = document.getElementById('p2EmptyState');
+    const p2CropBtn = document.getElementById('p2CropBtn');
+    const p2RotateBtn = document.getElementById('p2RotateBtn');
+    const p2RemoveBtn = document.getElementById('p2RemoveBtn');
+    const p2Status = document.getElementById('p2Status');
+
+    const outputMergeCanvas = document.getElementById('outputMergeCanvas');
+    const mergedCanvasWrapper = document.getElementById('mergedCanvasWrapper');
+    const noPhotosPrompt = document.getElementById('noPhotosPrompt');
+    const mergedActionToolbar = document.getElementById('mergedActionToolbar');
+
+    const spacingRange = document.getElementById('spacingRange');
+    const spacingDisplay = document.getElementById('spacingDisplay');
+    const bgPicker = document.getElementById('bgPicker');
+    const radiusRange = document.getElementById('radiusRange');
+    const radiusDisplay = document.getElementById('radiusDisplay');
+
+    const cropWorkspace = document.getElementById('cropWorkspace');
+    const cropInteractiveCanvas = document.getElementById('cropInteractiveCanvas');
+    const cCtx = cropInteractiveCanvas.getContext('2d');
+    const cornerLoupe = document.getElementById('cornerLoupe');
+    const loupeCanvas = document.getElementById('loupeCanvas');
+    const loupeCtx = loupeCanvas.getContext('2d');
+
+    const perspectiveModeCheckbox = document.getElementById('perspectiveModeCheckbox');
+    const cropModalHeading = document.getElementById('cropModalHeading');
+    const cropModalSubHeading = document.getElementById('cropModalSubHeading');
+    const cropModalIcon = document.getElementById('cropModalIcon');
+    const cropModeHint = document.getElementById('cropModeHint');
+    const applyCropBtn = document.getElementById('applyCropBtn');
+    const applyCropBtnText = document.getElementById('applyCropBtnText');
+
+    const zoomSlider = document.getElementById('zoomSlider');
+    const zoomLevelDisplay = document.getElementById('zoomLevelDisplay');
+    const panToolBtn = document.getElementById('panToolBtn');
+
+    window.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+    });
+
+    // Window resize handler for crop canvas
+    window.addEventListener('resize', () => {
+      if (!document.getElementById('cropModal').classList.contains('hidden') && appState.activeImgObj) {
+        setupCanvasDimensions(false);
+        drawActiveCropOverlay();
+      }
+    });
+
+
+    /* =========================================================================
+       PHOTO LOADING & DRAG-DROP
+    ========================================================================= */
+    function handleFileSelect(event, slot) {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+
+      if (!file.type.startsWith('image/')) {
+        showToast('कृपया मान्य इमेज फ़ाइल चुनें', 'error');
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = (e) => loadDataUrlIntoSlot(slot, e.target.result);
+      reader.readAsDataURL(file);
+    }
+
+    function loadDataUrlIntoSlot(slot, dataUrl) {
+      const img = new Image();
+      img.crossOrigin = 'Anonymous';
+      img.onload = () => {
+        if (slot === 1) {
+          appState.p1Image = img;
+          appState.p1DataUrl = dataUrl;
+          p1Preview.src = dataUrl;
+          p1Preview.classList.remove('hidden');
+          p1EmptyState.classList.add('hidden');
+          p1CropBtn.disabled = false;
+          p1RotateBtn.disabled = false;
+          p1RemoveBtn.classList.remove('hidden');
+          p1Status.classList.remove('hidden');
+        } else {
+          appState.p2Image = img;
+          appState.p2DataUrl = dataUrl;
+          p2Preview.src = dataUrl;
+          p2Preview.classList.remove('hidden');
+          p2EmptyState.classList.add('hidden');
+          p2CropBtn.disabled = false;
+          p2RotateBtn.disabled = false;
+          p2RemoveBtn.classList.remove('hidden');
+          p2Status.classList.remove('hidden');
+        }
+        lucide.createIcons();
+        recalculateAndRenderMerge();
+        showToast(`फोटो ${slot} लोड हो गया`);
+      };
+      img.src = dataUrl;
+    }
+
+    // Attach Drop events
+    ['p1DropArea', 'p2DropArea'].forEach((elemId, idx) => {
+      const slot = idx + 1;
+      const el = document.getElementById(elemId);
+
+      el.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        el.classList.add('border-indigo-500', 'bg-indigo-50/50');
+      });
+
+      el.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        el.classList.remove('border-indigo-500', 'bg-indigo-50/50');
+      });
+
+      el.addEventListener('drop', (e) => {
+        e.preventDefault();
+        el.classList.remove('border-indigo-500', 'bg-indigo-50/50');
+        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+          handleFileSelect({ target: { files: [e.dataTransfer.files[0]] } }, slot);
+        }
+      });
+    });
+
+    function rotatePhoto(slot) {
+      const targetImg = (slot === 1) ? appState.p1Image : appState.p2Image;
+      if (!targetImg) return;
+
+      const rotCanvas = document.createElement('canvas');
+      rotCanvas.width = targetImg.naturalHeight;
+      rotCanvas.height = targetImg.naturalWidth;
+      const rCtx = rotCanvas.getContext('2d');
+
+      rCtx.translate(rotCanvas.width / 2, rotCanvas.height / 2);
+      rCtx.rotate((90 * Math.PI) / 180);
+      rCtx.drawImage(targetImg, -targetImg.naturalWidth / 2, -targetImg.naturalHeight / 2);
+
+      const rotatedUrl = rotCanvas.toDataURL('image/jpeg', 0.95);
+      loadDataUrlIntoSlot(slot, rotatedUrl);
+      showToast(`फोटो ${slot} को 90° घुमाया गया`);
+    }
+
+    function clearSlot(slot) {
+      if (slot === 1) {
+        appState.p1Image = null;
+        appState.p1DataUrl = null;
+        p1Preview.src = '';
+        p1Preview.classList.add('hidden');
+        p1EmptyState.classList.remove('hidden');
+        p1CropBtn.disabled = true;
+        p1RotateBtn.disabled = true;
+        p1RemoveBtn.classList.add('hidden');
+        p1Status.classList.add('hidden');
+        document.getElementById('p1Input').value = '';
+      } else {
+        appState.p2Image = null;
+        appState.p2DataUrl = null;
+        p2Preview.src = '';
+        p2Preview.classList.add('hidden');
+        p2EmptyState.classList.remove('hidden');
+        p2CropBtn.disabled = true;
+        p2RotateBtn.disabled = true;
+        p2RemoveBtn.classList.add('hidden');
+        p2Status.classList.add('hidden');
+        document.getElementById('p2Input').value = '';
+      }
+      recalculateAndRenderMerge();
+      showToast(`फोटो ${slot} हटा दिया गया`);
+    }
+
+    function swapSlots() {
+      if (!appState.p1Image && !appState.p2Image) return;
+
+      const tmpUrl1 = appState.p1DataUrl;
+      const tmpUrl2 = appState.p2DataUrl;
+
+      if (tmpUrl2) {
+        loadDataUrlIntoSlot(1, tmpUrl2);
+      } else {
+        clearSlot(1);
+      }
+
+      if (tmpUrl1) {
+        loadDataUrlIntoSlot(2, tmpUrl1);
+      } else {
+        clearSlot(2);
+      }
+
+      showToast('फोटो 1 और 2 आपस में बदले गए');
+    }
+
+    /* =========================================================================
+       CAMERA HANDLER
+    ========================================================================= */
+    async function startCamera(slot) {
+      appState.camTargetSlot = slot;
+      const camModal = document.getElementById('webcamModal');
+      const camVideo = document.getElementById('webcamVideo');
+      const permAlert = document.getElementById('camPermAlert');
+
+      camModal.classList.remove('hidden');
+      permAlert.classList.remove('hidden');
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } },
+          audio: false
+        });
+        appState.camStream = stream;
+        camVideo.srcObject = stream;
+        permAlert.classList.add('hidden');
+      } catch (err) {
+        console.error('Camera error:', err);
+        showToast('कैमरा शुरू नहीं हुआ, अनुमति जांचें', 'error');
+        stopCamera();
+      }
+    }
+
+    function takeCameraSnapshot() {
+      const video = document.getElementById('webcamVideo');
+      if (!video.srcObject) return;
+
+      const capCanvas = document.createElement('canvas');
+      capCanvas.width = video.videoWidth || 1280;
+      capCanvas.height = video.videoHeight || 720;
+      const camCtx = capCanvas.getContext('2d');
+      camCtx.drawImage(video, 0, 0, capCanvas.width, capCanvas.height);
+
+      const capturedUrl = capCanvas.toDataURL('image/jpeg', 0.95);
+      loadDataUrlIntoSlot(appState.camTargetSlot, capturedUrl);
+      stopCamera();
+    }
+
+    function stopCamera() {
+      if (appState.camStream) {
+        appState.camStream.getTracks().forEach(t => t.stop());
+        appState.camStream = null;
+      }
+      const video = document.getElementById('webcamVideo');
+      video.srcObject = null;
+      document.getElementById('webcamModal').classList.add('hidden');
+    }
+
+
+    /* =========================================================================
+       MERGING ENGINE & RENDERER
+    ========================================================================= */
+    function setMergeLayout(layout) {
+      appState.mergeLayout = layout;
+      ['horizontal', 'vertical', 'idcard'].forEach(mode => {
+        const btnId = 'btn' + (mode === 'idcard' ? 'IdCard' : mode.charAt(0).toUpperCase() + mode.slice(1));
+        const btn = document.getElementById(btnId);
+        if (mode === layout) {
+          btn.className = 'py-1.5 rounded-lg transition bg-white text-indigo-600 shadow-sm flex items-center justify-center gap-1 cursor-pointer font-bold';
+        } else {
+          btn.className = 'py-1.5 rounded-lg transition text-slate-600 hover:text-slate-900 flex items-center justify-center gap-1 cursor-pointer font-semibold';
+        }
+      });
+      recalculateAndRenderMerge();
+    }
+
+    function updateMergeSettings() {
+      appState.spacing = parseInt(spacingRange.value, 10);
+      spacingDisplay.innerText = appState.spacing + ' px';
+      appState.borderRadius = parseInt(radiusRange.value, 10);
+      radiusDisplay.innerText = appState.borderRadius + ' px';
+      appState.bgColor = bgPicker.value;
+      recalculateAndRenderMerge();
+    }
+
+    function quickBg(color) {
+      appState.bgColor = color;
+      bgPicker.value = (color === 'transparent') ? '#ffffff' : color;
+      recalculateAndRenderMerge();
+    }
+
+    function recalculateAndRenderMerge() {
+      const { p1Image, p2Image, mergeLayout, spacing, bgColor, borderRadius } = appState;
+
+      if (!p1Image && !p2Image) {
+        mergedCanvasWrapper.classList.add('hidden');
+        mergedActionToolbar.classList.add('hidden');
+        noPhotosPrompt.classList.remove('hidden');
+        return;
+      }
+
+      noPhotosPrompt.classList.add('hidden');
+      mergedCanvasWrapper.classList.remove('hidden');
+      mergedActionToolbar.classList.remove('hidden');
+
+      const ctx = outputMergeCanvas.getContext('2d');
+
+      if (p1Image && !p2Image) {
+        drawSinglePhotoSlot(ctx, p1Image, spacing, bgColor, borderRadius);
+        return;
+      }
+      if (!p1Image && p2Image) {
+        drawSinglePhotoSlot(ctx, p2Image, spacing, bgColor, borderRadius);
+        return;
+      }
+
+      let w1 = p1Image.naturalWidth;
+      let h1 = p1Image.naturalHeight;
+      let w2 = p2Image.naturalWidth;
+      let h2 = p2Image.naturalHeight;
+
+      if (mergeLayout === 'horizontal') {
+        const targetH = Math.max(h1, h2);
+        w1 = Math.round(w1 * (targetH / h1));
+        h1 = targetH;
+        w2 = Math.round(w2 * (targetH / h2));
+        h2 = targetH;
+
+        const totalWidth = w1 + w2 + spacing * 3;
+        const totalHeight = targetH + spacing * 2;
+
+        outputMergeCanvas.width = totalWidth;
+        outputMergeCanvas.height = totalHeight;
+
+        paintCanvasBackground(ctx, totalWidth, totalHeight, bgColor);
+        drawRoundedImage(ctx, p1Image, spacing, spacing, w1, h1, borderRadius);
+        drawRoundedImage(ctx, p2Image, spacing * 2 + w1, spacing, w2, h2, borderRadius);
+
+      } else if (mergeLayout === 'vertical') {
+        const targetW = Math.max(w1, w2);
+        h1 = Math.round(h1 * (targetW / w1));
+        w1 = targetW;
+        h2 = Math.round(h2 * (targetW / w2));
+        w2 = targetW;
+
+        const totalWidth = targetW + spacing * 2;
+        const totalHeight = h1 + h2 + spacing * 3;
+
+        outputMergeCanvas.width = totalWidth;
+        outputMergeCanvas.height = totalHeight;
+
+        paintCanvasBackground(ctx, totalWidth, totalHeight, bgColor);
+        drawRoundedImage(ctx, p1Image, spacing, spacing, w1, h1, borderRadius);
+        drawRoundedImage(ctx, p2Image, spacing, spacing * 2 + h1, w2, h2, borderRadius);
+
+      } else if (mergeLayout === 'idcard') {
+        // Aadhaar Standard ISO CR80 Ratio
+        const standardCardW = 1000;
+        const standardCardH = 630;
+        const totalWidth = standardCardW * 2 + spacing * 3;
+        const totalHeight = standardCardH + spacing * 2 + 54;
+
+        outputMergeCanvas.width = totalWidth;
+        outputMergeCanvas.height = totalHeight;
+
+        paintCanvasBackground(ctx, totalWidth, totalHeight, bgColor || '#ffffff');
+        drawRoundedImage(ctx, p1Image, spacing, spacing, standardCardW, standardCardH, borderRadius || 16);
+        drawRoundedImage(ctx, p2Image, spacing * 2 + standardCardW, spacing, standardCardW, standardCardH, borderRadius || 16);
+
+        ctx.font = '600 22px Hind, sans-serif';
+        ctx.fillStyle = '#64748b';
+        ctx.textAlign = 'center';
+        ctx.fillText('आगे का भाग (Front)', spacing + standardCardW / 2, standardCardH + spacing + 36);
+        ctx.fillText('पीछे का भाग (Back)', spacing * 2 + standardCardW + standardCardW / 2, standardCardH + spacing + 36);
+      }
+    }
+
+    function drawSinglePhotoSlot(ctx, img, spacing, bgColor, borderRadius) {
+      const w = img.naturalWidth;
+      const h = img.naturalHeight;
+      outputMergeCanvas.width = w + spacing * 2;
+      outputMergeCanvas.height = h + spacing * 2;
+      paintCanvasBackground(ctx, outputMergeCanvas.width, outputMergeCanvas.height, bgColor);
+      drawRoundedImage(ctx, img, spacing, spacing, w, h, borderRadius);
+    }
+
+    function paintCanvasBackground(ctx, w, h, color) {
+      if (color === 'transparent') {
+        ctx.clearRect(0, 0, w, h);
+      } else {
+        ctx.fillStyle = color;
+        ctx.fillRect(0, 0, w, h);
+      }
+    }
+
+    function drawRoundedImage(ctx, img, x, y, w, h, r) {
+      if (r <= 0) {
+        ctx.drawImage(img, x, y, w, h);
+        return;
+      }
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      ctx.lineTo(x + r, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+      ctx.lineTo(x, y + r);
+      ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+      ctx.clip();
+      ctx.drawImage(img, x, y, w, h);
+      ctx.restore();
+    }
+
+
+    /* =========================================================================
+       ZOOM, PAN & COORDINATE CONVERSION ENGINE
+    ========================================================================= */
+    function getCombinedScale() {
+      return appState.baseScale * appState.zoomFactor;
+    }
+
+    // Convert Image coordinates -> Screen Canvas pixels
+    function imgToScreen(x, y) {
+      const scale = getCombinedScale();
+      return {
+        x: x * scale + appState.panX,
+        y: y * scale + appState.panY
+      };
+    }
+
+    // Convert Screen Canvas pixels -> Image coordinates
+    function screenToImg(screenX, screenY) {
+      const scale = getCombinedScale();
+      return {
+        x: (screenX - appState.panX) / scale,
+        y: (screenY - appState.panY) / scale
+      };
+    }
+
+    function setupCanvasDimensions(resetTransform = true) {
+      const img = appState.activeImgObj;
+      if (!img) return;
+
+      const workspace = document.getElementById('cropWorkspace');
+      const maxW = workspace.clientWidth || window.innerWidth;
+      const maxH = workspace.clientHeight || (window.innerHeight - 140);
+
+      // Base scale fits the whole image within available viewport
+      const sW = (maxW - 16) / img.naturalWidth;
+      const sH = (maxH - 16) / img.naturalHeight;
+      appState.baseScale = Math.min(sW, sH, 1.0);
+
+      cropInteractiveCanvas.width = maxW;
+      cropInteractiveCanvas.height = maxH;
+
+      if (resetTransform) {
+        resetZoomAndPan();
+      } else {
+        clampPanOffsets();
+      }
+    }
+
+    function resetZoomAndPan() {
+      appState.zoomFactor = 1.0;
+      zoomSlider.value = 1;
+      zoomLevelDisplay.innerText = '100%';
+
+      const img = appState.activeImgObj;
+      if (img) {
+        // Center the image in the canvas viewport
+        const renderedW = img.naturalWidth * appState.baseScale;
+        const renderedH = img.naturalHeight * appState.baseScale;
+        appState.panX = Math.round((cropInteractiveCanvas.width - renderedW) / 2);
+        appState.panY = Math.round((cropInteractiveCanvas.height - renderedH) / 2);
+      } else {
+        appState.panX = 0;
+        appState.panY = 0;
+      }
+
+      if (appState.isPanToolActive) {
+        togglePanTool(); // Turn off pan mode on reset
+      }
+
+      drawActiveCropOverlay();
+    }
+
+    function clampPanOffsets() {
+      const img = appState.activeImgObj;
+      if (!img) return;
+
+      const scale = getCombinedScale();
+      const renderedW = img.naturalWidth * scale;
+      const renderedH = img.naturalHeight * scale;
+      const cw = cropInteractiveCanvas.width;
+      const ch = cropInteractiveCanvas.height;
+
+      // Allow panning with generous bounds so user never loses image
+      const minX = Math.min(cw * 0.1 - renderedW, 0);
+      const maxX = Math.max(cw * 0.9, cw - renderedW * 0.1);
+      const minY = Math.min(ch * 0.1 - renderedH, 0);
+      const maxY = Math.max(ch * 0.9, ch - renderedH * 0.1);
+
+      appState.panX = Math.max(minX, Math.min(maxX, appState.panX));
+      appState.panY = Math.max(minY, Math.min(maxY, appState.panY));
+    }
+
+    function setZoom(newZoom, focalScreenX, focalScreenY) {
+      const oldZoom = appState.zoomFactor;
+      const clampedZoom = Math.max(1.0, Math.min(5.0, newZoom));
+      if (Math.abs(clampedZoom - oldZoom) < 0.001) return;
+
+      // Zoom towards center of workspace if focal point not supplied
+      const fx = focalScreenX !== undefined ? focalScreenX : cropInteractiveCanvas.width / 2;
+      const fy = focalScreenY !== undefined ? focalScreenY : cropInteractiveCanvas.height / 2;
+
+      // Point in image space before zoom
+      const oldScale = appState.baseScale * oldZoom;
+      const imgX = (fx - appState.panX) / oldScale;
+      const imgY = (fy - appState.panY) / oldScale;
+
+      appState.zoomFactor = clampedZoom;
+      const newScale = appState.baseScale * clampedZoom;
+
+      // Adjust pan so (imgX, imgY) stays at (fx, fy)
+      appState.panX = fx - imgX * newScale;
+      appState.panY = fy - imgY * newScale;
+
+      clampPanOffsets();
+      zoomSlider.value = clampedZoom.toFixed(2);
+      zoomLevelDisplay.innerText = Math.round(clampedZoom * 100) + '%';
+      drawActiveCropOverlay();
+    }
+
+    function stepZoom(delta) {
+      setZoom(appState.zoomFactor + delta);
+    }
+
+    function onZoomSliderChange(val) {
+      setZoom(parseFloat(val));
+    }
+
+    function togglePanTool() {
+      appState.isPanToolActive = !appState.isPanToolActive;
+      if (appState.isPanToolActive) {
+        panToolBtn.className = 'inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-600 text-white border border-indigo-500 text-[11px] font-bold transition cursor-pointer shadow-sm';
+        cropInteractiveCanvas.classList.remove('cursor-crosshair');
+        cropInteractiveCanvas.classList.add('cursor-grab');
+        showToast('पैन टूल सक्रिय: स्क्रीन पकड़कर खिसकाएं');
+      } else {
+        panToolBtn.className = 'inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-[11px] font-semibold transition cursor-pointer';
+        cropInteractiveCanvas.classList.remove('cursor-grab', 'cursor-grabbing');
+        cropInteractiveCanvas.classList.add('cursor-crosshair');
+      }
+    }
+
+    // Canvas Wheel to Zoom
+    cropInteractiveCanvas.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const rect = cropInteractiveCanvas.getBoundingClientRect();
+      const focalX = e.clientX - rect.left;
+      const focalY = e.clientY - rect.top;
+      const zoomStep = e.deltaY < 0 ? 0.2 : -0.2;
+      setZoom(appState.zoomFactor + zoomStep, focalX, focalY);
+    }, { passive: false });
+
+
+    /* =========================================================================
+       UNIFIED CROP SYSTEM (NORMAL CROP & PERSPECTIVE WARP)
+    ========================================================================= */
+    function launchCropperModal(target) {
+      appState.cropTarget = target;
+      let targetUrl = '';
+
+      if (target === 1 && appState.p1DataUrl) {
+        targetUrl = appState.p1DataUrl;
+      } else if (target === 2 && appState.p2DataUrl) {
+        targetUrl = appState.p2DataUrl;
+      } else if (target === 'merged' && (appState.p1Image || appState.p2Image)) {
+        targetUrl = outputMergeCanvas.toDataURL('image/png');
+      } else {
+        showToast('क्रॉप करने के लिए फोटो मौजूद नहीं है', 'error');
+        return;
+      }
+
+      const img = new Image();
+      img.crossOrigin = 'Anonymous';
+      img.onload = () => {
+        appState.activeImgObj = img;
+        
+        // DEFAULT IS NORMAL CROP (UNCHECKED)
+        perspectiveModeCheckbox.checked = false;
+        appState.isPerspectiveMode = false;
+        updateCropUiMode();
+
+        document.getElementById('cropModal').classList.remove('hidden');
+
+        requestAnimationFrame(() => {
+          setupCanvasDimensions(true);
+          resetCropSelection(0.08);
+          lucide.createIcons();
+        });
+      };
+      img.src = targetUrl;
+    }
+
+    function toggleCropMode(isPerspectiveChecked) {
+      appState.isPerspectiveMode = isPerspectiveChecked;
+      updateCropUiMode();
+
+      // Convert current crop box to perspective corners or vice-versa
+      if (isPerspectiveChecked) {
+        // Initialize 4 perspective corners based on current normal crop box
+        const nb = appState.normalBox;
+        appState.perspCorners = [
+          { x: nb.x, y: nb.y },
+          { x: nb.x + nb.w, y: nb.y },
+          { x: nb.x + nb.w, y: nb.y + nb.h },
+          { x: nb.x, y: nb.y + nb.h }
+        ];
+        showToast('पर्सपेक्टिव मोड सक्रिय: 4 कोनों को अलग-अलग खींचें');
+      } else {
+        // Enclosing bounding rectangle
+        const pts = appState.perspCorners;
+        const minX = Math.min(...pts.map(p => p.x));
+        const maxX = Math.max(...pts.map(p => p.x));
+        const minY = Math.min(...pts.map(p => p.y));
+        const maxY = Math.max(...pts.map(p => p.y));
+        appState.normalBox = { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+        showToast('सामान्य आयताकार क्रॉप सक्रिय');
+      }
+
+      cornerLoupe.classList.add('hidden');
+      drawActiveCropOverlay();
+    }
+
+    function updateCropUiMode() {
+      const isPersp = appState.isPerspectiveMode;
+      const targetName = (appState.cropTarget === 'merged') ? 'मर्ज फोटो' : `फोटो ${appState.cropTarget}`;
+
+      if (isPersp) {
+        cropModalHeading.innerText = `${targetName}: 4-Corner पर्सपेक्टिव क्रॉप (Photoshop Deskew)`;
+        cropModalSubHeading.innerText = 'चारों पीले कोनों को स्वतंत्र रूप से खींचकर टेढ़े दस्तावेज़ को सीधा करें';
+        cropModalIcon.className = 'w-7 h-7 rounded-lg bg-amber-500 flex items-center justify-center text-slate-950 font-bold';
+        cropModeHint.innerHTML = '<strong>पर्सपेक्टिव मोड:</strong> चारों पीले हैंडल्स को खींचें। ज़ूम इन करके कोने सही जगह बिठाएं';
+        cropModeHint.className = 'absolute bottom-2 left-1/2 -translate-x-1/2 bg-slate-900/90 backdrop-blur text-amber-300 border border-amber-500/40 text-[11px] px-3 py-1 rounded-full pointer-events-none shadow-lg';
+        applyCropBtn.className = 'px-5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 rounded-xl text-xs sm:text-sm font-bold shadow-lg shadow-amber-500/20 active:scale-95 transition cursor-pointer flex items-center gap-1.5';
+        applyCropBtnText.innerText = 'सीधा और क्रॉप करें (Warp Deskew)';
+      } else {
+        cropModalHeading.innerText = `${targetName}: सामान्य क्रॉप (Normal Crop)`;
+        cropModalSubHeading.innerText = '8 हैंडल्स द्वारा आयत को खींचें, आकार बदलें या खिसकाएं';
+        cropModalIcon.className = 'w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold';
+        cropModeHint.innerHTML = '<strong>सामान्य क्रॉप:</strong> किनारों और कोनों को खींचकर आयताकार काटें। ज़ूम के लिए 2 उंगलियों से पिंच करें';
+        cropModeHint.className = 'absolute bottom-2 left-1/2 -translate-x-1/2 bg-slate-900/90 backdrop-blur text-indigo-300 border border-indigo-500/40 text-[11px] px-3 py-1 rounded-full pointer-events-none shadow-lg';
+        applyCropBtn.className = 'px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs sm:text-sm font-bold shadow-lg active:scale-95 transition cursor-pointer flex items-center gap-1.5';
+        applyCropBtnText.innerText = 'क्रॉप लागू करें (Normal Crop)';
+      }
+    }
+
+    function resetCropSelection(insetRatio = 0.08) {
+      const img = appState.activeImgObj;
+      if (!img) return;
+
+      const w = img.naturalWidth;
+      const h = img.naturalHeight;
+      const ix = w * insetRatio;
+      const iy = h * insetRatio;
+
+      // Reset Normal Rectangular Box
+      appState.normalBox = {
+        x: ix,
+        y: iy,
+        w: w - ix * 2,
+        h: h - iy * 2
+      };
+
+      // Reset Perspective 4 Corners
+      appState.perspCorners = [
+        { x: ix, y: iy },
+        { x: w - ix, y: iy },
+        { x: w - ix, y: h - iy },
+        { x: ix, y: h - iy }
+      ];
+
+      enforceAspectRatioConstraint();
+      drawActiveCropOverlay();
+    }
+
+    function setCropRatio(ratio) {
+      appState.cropRatio = ratio;
+      ['free', '1:1', 'idcard', '4:3', 'a4'].forEach(r => {
+        const idMap = { 'free': 'rBtnFree', '1:1': 'rBtn11', 'idcard': 'rBtnId', '4:3': 'rBtn43', 'a4': 'rBtnA4' };
+        const btn = document.getElementById(idMap[r]);
+        if (r === ratio) {
+          btn.className = 'px-2 py-0.5 rounded bg-indigo-600 text-white font-bold text-xs cursor-pointer';
+        } else {
+          btn.className = 'px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 text-xs font-semibold cursor-pointer';
+        }
+      });
+
+      enforceAspectRatioConstraint();
+      drawActiveCropOverlay();
+    }
+
+    function enforceAspectRatioConstraint() {
+      if (appState.cropRatio === 'free') return;
+
+      let targetRatio = 1.0;
+      if (appState.cropRatio === '1:1') targetRatio = 1.0;
+      else if (appState.cropRatio === '4:3') targetRatio = 4 / 3;
+      else if (appState.cropRatio === 'idcard') targetRatio = 85.6 / 54; // Aadhaar card
+      else if (appState.cropRatio === 'a4') targetRatio = 1 / 1.414;
+
+      const img = appState.activeImgObj;
+      if (!img) return;
+
+      if (!appState.isPerspectiveMode) {
+        const box = appState.normalBox;
+        let newW = box.w;
+        let newH = newW / targetRatio;
+
+        if (box.y + newH > img.naturalHeight) {
+          newH = img.naturalHeight - box.y;
+          newW = newH * targetRatio;
+        }
+        if (box.x + newW > img.naturalWidth) {
+          newW = img.naturalWidth - box.x;
+          newH = newW / targetRatio;
+        }
+
+        appState.normalBox.w = newW;
+        appState.normalBox.h = newH;
+      }
+    }
+
+    function closeCropModal() {
+      document.getElementById('cropModal').classList.add('hidden');
+      cornerLoupe.classList.add('hidden');
+      appState.activeImgObj = null;
+    }
+
+
+    /* =========================================================================
+       CANVAS OVERLAY DRAWING (NORMAL VS PERSPECTIVE WITH ZOOM/PAN)
+    ========================================================================= */
+    function drawActiveCropOverlay() {
+      const img = appState.activeImgObj;
+      if (!img) return;
+
+      const scale = getCombinedScale();
+      const px = appState.panX;
+      const py = appState.panY;
+      const cw = cropInteractiveCanvas.width;
+      const ch = cropInteractiveCanvas.height;
+
+      cCtx.clearRect(0, 0, cw, ch);
+
+      // Dark neutral background behind transformed canvas
+      cCtx.fillStyle = '#0a0a0a';
+      cCtx.fillRect(0, 0, cw, ch);
+
+      // Draw active image with current zoom and pan translation
+      const imgDrawW = img.naturalWidth * scale;
+      const imgDrawH = img.naturalHeight * scale;
+      cCtx.drawImage(img, px, py, imgDrawW, imgDrawH);
+
+      if (appState.isPerspectiveMode) {
+        drawPerspectiveOverlayMode();
+      } else {
+        drawNormalCropOverlayMode();
+      }
+    }
+
+    // MODE A: Normal Crop Overlay with Zoom/Pan
+    function drawNormalCropOverlayMode() {
+      const b = appState.normalBox;
+      const pTL = imgToScreen(b.x, b.y);
+      const scale = getCombinedScale();
+      const bw = b.w * scale;
+      const bh = b.h * scale;
+
+      const cw = cropInteractiveCanvas.width;
+      const ch = cropInteractiveCanvas.height;
+
+      // Darkened outer mask around active crop box
+      cCtx.save();
+      cCtx.fillStyle = 'rgba(0, 0, 0, 0.65)';
+      
+      // Construct cutout path for crop window
+      cCtx.beginPath();
+      cCtx.rect(0, 0, cw, ch);
+      cCtx.rect(pTL.x, pTL.y, bw, bh);
+      cCtx.fill('evenodd');
+
+      // Border Outline
+      cCtx.strokeStyle = '#ffffff';
+      cCtx.lineWidth = 2;
+      cCtx.strokeRect(pTL.x, pTL.y, bw, bh);
+
+      // Rule-of-Thirds Grid
+      cCtx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+      cCtx.lineWidth = 1;
+      cCtx.beginPath();
+      // Verticals
+      cCtx.moveTo(pTL.x + bw / 3, pTL.y);
+      cCtx.lineTo(pTL.x + bw / 3, pTL.y + bh);
+      cCtx.moveTo(pTL.x + (bw * 2) / 3, pTL.y);
+      cCtx.lineTo(pTL.x + (bw * 2) / 3, pTL.y + bh);
+      // Horizontals
+      cCtx.moveTo(pTL.x, pTL.y + bh / 3);
+      cCtx.lineTo(pTL.x + bw, pTL.y + bh / 3);
+      cCtx.moveTo(pTL.x, pTL.y + (bh * 2) / 3);
+      cCtx.lineTo(pTL.x + bw, pTL.y + (bh * 2) / 3);
+      cCtx.stroke();
+
+      // 8 Handles for Normal Crop
+      const handles = getNormalHandlePoints(pTL.x, pTL.y, bw, bh);
+      handles.forEach(h => {
+        // Outer soft circle
+        cCtx.beginPath();
+        cCtx.arc(h.x, h.y, 8, 0, Math.PI * 2);
+        cCtx.fillStyle = '#4f46e5'; // Indigo 600
+        cCtx.fill();
+
+        // Inner white circle
+        cCtx.beginPath();
+        cCtx.arc(h.x, h.y, 4, 0, Math.PI * 2);
+        cCtx.fillStyle = '#ffffff';
+        cCtx.fill();
+      });
+
+      cCtx.restore();
+    }
+
+    function getNormalHandlePoints(bx, by, bw, bh) {
+      return [
+        { id: 'tl', x: bx, y: by },
+        { id: 'tc', x: bx + bw / 2, y: by },
+        { id: 'tr', x: bx + bw, y: by },
+        { id: 'mr', x: bx + bw, y: by + bh / 2 },
+        { id: 'br', x: bx + bw, y: by + bh },
+        { id: 'bc', x: bx + bw / 2, y: by + bh },
+        { id: 'bl', x: bx, y: by + bh },
+        { id: 'ml', x: bx, y: by + bh / 2 }
+      ];
+    }
+
+    // MODE B: Perspective Overlay Mode with Zoom/Pan
+    function drawPerspectiveOverlayMode() {
+      const pts = appState.perspCorners.map(c => imgToScreen(c.x, c.y));
+      const cw = cropInteractiveCanvas.width;
+      const ch = cropInteractiveCanvas.height;
+
+      // Dark translucent mask outside 4-corner polygon
+      cCtx.save();
+      cCtx.beginPath();
+      cCtx.rect(0, 0, cw, ch);
+      cCtx.moveTo(pts[0].x, pts[0].y);
+      cCtx.lineTo(pts[3].x, pts[3].y);
+      cCtx.lineTo(pts[2].x, pts[2].y);
+      cCtx.lineTo(pts[1].x, pts[1].y);
+      cCtx.closePath();
+      cCtx.fillStyle = 'rgba(0, 0, 0, 0.65)';
+      cCtx.fill();
+
+      // Polygon Outline
+      cCtx.beginPath();
+      cCtx.moveTo(pts[0].x, pts[0].y);
+      cCtx.lineTo(pts[1].x, pts[1].y);
+      cCtx.lineTo(pts[2].x, pts[2].y);
+      cCtx.lineTo(pts[3].x, pts[3].y);
+      cCtx.closePath();
+      cCtx.strokeStyle = '#f59e0b'; // Amber 500
+      cCtx.lineWidth = 2.5;
+      cCtx.stroke();
+
+      // 3x3 Perspective Grid
+      cCtx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+      cCtx.lineWidth = 1;
+      cCtx.setLineDash([4, 4]);
+      for (let i = 1; i <= 2; i++) {
+        const t = i / 3;
+        const topX = pts[0].x + (pts[1].x - pts[0].x) * t;
+        const topY = pts[0].y + (pts[1].y - pts[0].y) * t;
+        const botX = pts[3].x + (pts[2].x - pts[3].x) * t;
+        const botY = pts[3].y + (pts[2].y - pts[3].y) * t;
+        cCtx.beginPath();
+        cCtx.moveTo(topX, topY);
+        cCtx.lineTo(botX, botY);
+        cCtx.stroke();
+
+        const lftX = pts[0].x + (pts[3].x - pts[0].x) * t;
+        const lftY = pts[0].y + (pts[3].y - pts[0].y) * t;
+        const rgtX = pts[1].x + (pts[2].x - pts[1].x) * t;
+        const rgtY = pts[1].y + (pts[2].y - pts[1].y) * t;
+        cCtx.beginPath();
+        cCtx.moveTo(lftX, lftY);
+        cCtx.lineTo(rgtX, rgtY);
+        cCtx.stroke();
+      }
+      cCtx.setLineDash([]);
+
+      // 4 Yellow Corner Pins
+      const cornerTitles = ['ऊपर-बायाँ', 'ऊपर-दायाँ', 'नीचे-दायाँ', 'नीचे-बायाँ'];
+      pts.forEach((pt, i) => {
+        const isDragging = appState.activePerspCornerIdx === i;
+
+        // Big Touch target halo
+        cCtx.beginPath();
+        cCtx.arc(pt.x, pt.y, isDragging ? 26 : 18, 0, Math.PI * 2);
+        cCtx.fillStyle = isDragging ? 'rgba(245, 158, 11, 0.55)' : 'rgba(245, 158, 11, 0.3)';
+        cCtx.fill();
+
+        // Solid Pin
+        cCtx.beginPath();
+        cCtx.arc(pt.x, pt.y, isDragging ? 13 : 9, 0, Math.PI * 2);
+        cCtx.fillStyle = isDragging ? '#ea580c' : '#ffffff';
+        cCtx.strokeStyle = '#f59e0b';
+        cCtx.lineWidth = 3;
+        cCtx.fill();
+        cCtx.stroke();
+
+        // Pin center dot
+        cCtx.beginPath();
+        cCtx.arc(pt.x, pt.y, 3, 0, Math.PI * 2);
+        cCtx.fillStyle = '#0f172a';
+        cCtx.fill();
+
+        // Text Tag
+        cCtx.font = 'bold 11px Hind, sans-serif';
+        cCtx.fillStyle = '#fef08a';
+        cCtx.shadowColor = '#000000';
+        cCtx.shadowBlur = 4;
+        const alignX = (i === 0 || i === 3) ? -14 : 14;
+        const alignY = (i === 0 || i === 1) ? -14 : 20;
+        cCtx.textAlign = (i === 0 || i === 3) ? 'right' : 'left';
+        cCtx.fillText(cornerTitles[i], pt.x + alignX, pt.y + alignY);
+        cCtx.shadowBlur = 0;
+      });
+
+      cCtx.restore();
+    }
+
+
+    /* =========================================================================
+       TOUCH & POINTER EVENT CONTROLLER (PINCH-TO-ZOOM, PAN & DRAG)
+    ========================================================================= */
+    function getPointerPosition(e) {
+      const rect = cropInteractiveCanvas.getBoundingClientRect();
+      const screenX = e.clientX - rect.left;
+      const screenY = e.clientY - rect.top;
+      const imgPos = screenToImg(screenX, screenY);
+      return {
+        screenX,
+        screenY,
+        imgX: imgPos.x,
+        imgY: imgPos.y,
+        clientX: e.clientX,
+        clientY: e.clientY
+      };
+    }
+
+    function onPointerDown(e) {
+      if (!appState.activeImgObj) return;
+
+      try {
+        cropInteractiveCanvas.setPointerCapture(e.pointerId);
+      } catch (err) {}
+
+      // Register touch point for pinch gestures
+      appState.activeTouches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+      // Handle 2-Finger Pinch Gesture start
+      if (appState.activeTouches.size === 2) {
+        const touchPoints = Array.from(appState.activeTouches.values());
+        appState.initialPinchDist = Math.hypot(
+          touchPoints[0].x - touchPoints[1].x,
+          touchPoints[0].y - touchPoints[1].y
+        );
+        appState.initialPinchZoom = appState.zoomFactor;
+        appState.initialPanStart = { x: appState.panX, y: appState.panY };
+        appState.activePerspCornerIdx = -1;
+        appState.normalDragType = null;
+        cornerLoupe.classList.add('hidden');
+        return;
+      }
+
+      // If Pan Tool is explicitly active or space/middle click
+      if (appState.isPanToolActive || e.button === 1) {
+        appState.isPanningActive = true;
+        appState.panStartClient = { x: e.clientX - appState.panX, y: e.clientY - appState.panY };
+        cropInteractiveCanvas.classList.remove('cursor-grab');
+        cropInteractiveCanvas.classList.add('cursor-grabbing');
+        return;
+      }
+
+      const p = getPointerPosition(e);
+
+      if (appState.isPerspectiveMode) {
+        handlePerspectivePointerDown(p);
+      } else {
+        handleNormalPointerDown(p);
+      }
+    }
+
+    function onPointerMove(e) {
+      if (!appState.activeImgObj) return;
+
+      // Update current touch position
+      if (appState.activeTouches.has(e.pointerId)) {
+        appState.activeTouches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      }
+
+      // Handle Two-Finger Pinch-to-Zoom & Pan Gesture
+      if (appState.activeTouches.size === 2) {
+        const touchPoints = Array.from(appState.activeTouches.values());
+        const currentDist = Math.hypot(
+          touchPoints[0].x - touchPoints[1].x,
+          touchPoints[0].y - touchPoints[1].y
+        );
+
+        if (appState.initialPinchDist > 0) {
+          const pinchScale = currentDist / appState.initialPinchDist;
+          const rect = cropInteractiveCanvas.getBoundingClientRect();
+          const midX = (touchPoints[0].x + touchPoints[1].x) / 2 - rect.left;
+          const midY = (touchPoints[0].y + touchPoints[1].y) / 2 - rect.top;
+          setZoom(appState.initialPinchZoom * pinchScale, midX, midY);
+        }
+        return;
+      }
+
+      // Handle Canvas Pan Dragging
+      if (appState.isPanningActive) {
+        appState.panX = e.clientX - appState.panStartClient.x;
+        appState.panY = e.clientY - appState.panStartClient.y;
+        clampPanOffsets();
+        drawActiveCropOverlay();
+        return;
+      }
+
+      const p = getPointerPosition(e);
+
+      if (appState.isPerspectiveMode) {
+        handlePerspectivePointerMove(p);
+      } else {
+        handleNormalPointerMove(p);
+      }
+    }
+
+    function onPointerUp(e) {
+      try {
+        cropInteractiveCanvas.releasePointerCapture(e.pointerId);
+      } catch (err) {}
+
+      appState.activeTouches.delete(e.pointerId);
+
+      if (appState.activeTouches.size < 2) {
+        appState.initialPinchDist = 0;
+      }
+
+      appState.isPanningActive = false;
+      if (appState.isPanToolActive) {
+        cropInteractiveCanvas.classList.remove('cursor-grabbing');
+        cropInteractiveCanvas.classList.add('cursor-grab');
+      }
+
+      appState.activePerspCornerIdx = -1;
+      appState.normalDragType = null;
+      cornerLoupe.classList.add('hidden');
+      drawActiveCropOverlay();
+    }
+
+    cropInteractiveCanvas.addEventListener('pointerdown', onPointerDown);
+    cropInteractiveCanvas.addEventListener('pointermove', onPointerMove);
+    cropInteractiveCanvas.addEventListener('pointerup', onPointerUp);
+    cropInteractiveCanvas.addEventListener('pointercancel', onPointerUp);
+
+    // NORMAL CROP POINTER LOGIC (SCREEN-PIXEL ACCURACY)
+    function handleNormalPointerDown(p) {
+      const b = appState.normalBox;
+      const pTL = imgToScreen(b.x, b.y);
+      const scale = getCombinedScale();
+      const bw = b.w * scale;
+      const bh = b.h * scale;
+
+      const handles = getNormalHandlePoints(pTL.x, pTL.y, bw, bh);
+      const touchRadiusScreen = 32; // Generous screen touch target
+
+      let matchedHandle = null;
+      for (const h of handles) {
+        if (Math.hypot(h.x - p.screenX, h.y - p.screenY) <= touchRadiusScreen) {
+          matchedHandle = h.id;
+          break;
+        }
+      }
+
+      if (matchedHandle) {
+        appState.normalDragType = matchedHandle;
+      } else if (p.imgX >= b.x && p.imgX <= b.x + b.w && p.imgY >= b.y && p.imgY <= b.y + b.h) {
+        // Inside box -> move whole crop area
+        appState.normalDragType = 'move';
+      } else {
+        // Outside -> Start a fresh box from tap position
+        appState.normalBox = { x: p.imgX, y: p.imgY, w: 10, h: 10 };
+        appState.normalDragType = 'br';
+      }
+
+      appState.dragStartPt = { x: p.imgX, y: p.imgY };
+      appState.initialBox = { ...appState.normalBox };
+      drawActiveCropOverlay();
+    }
+
+    function handleNormalPointerMove(p) {
+      if (!appState.normalDragType) return;
+
+      const img = appState.activeImgObj;
+      const dx = p.imgX - appState.dragStartPt.x;
+      const dy = p.imgY - appState.dragStartPt.y;
+      const init = appState.initialBox;
+      const type = appState.normalDragType;
+
+      let newX = init.x;
+      let newY = init.y;
+      let newW = init.w;
+      let newH = init.h;
+
+      if (type === 'move') {
+        newX = Math.max(0, Math.min(img.naturalWidth - init.w, init.x + dx));
+        newY = Math.max(0, Math.min(img.naturalHeight - init.h, init.y + dy));
+      } else {
+        if (type.includes('r')) newW = Math.max(20, init.w + dx);
+        if (type.includes('b')) newH = Math.max(20, init.h + dy);
+        if (type.includes('l')) {
+          const clampedDx = Math.min(dx, init.w - 20);
+          newX = init.x + clampedDx;
+          newW = init.w - clampedDx;
+        }
+        if (type.includes('t')) {
+          const clampedDy = Math.min(dy, init.h - 20);
+          newY = init.y + clampedDy;
+          newH = init.h - clampedDy;
+        }
+
+        // Clamp to image boundaries
+        if (newX < 0) { newW += newX; newX = 0; }
+        if (newY < 0) { newH += newY; newY = 0; }
+        if (newX + newW > img.naturalWidth) newW = img.naturalWidth - newX;
+        if (newY + newH > img.naturalHeight) newH = img.naturalHeight - newY;
+      }
+
+      appState.normalBox = { x: newX, y: newY, w: newW, h: newH };
+      enforceAspectRatioConstraint();
+      drawActiveCropOverlay();
+    }
+
+    // PERSPECTIVE CROP POINTER LOGIC (SCREEN-PIXEL ACCURACY)
+    function handlePerspectivePointerDown(p) {
+      const touchRadiusScreen = 48; // Large 48px touch halo on screen
+
+      let closestIdx = -1;
+      let minDistance = Infinity;
+
+      appState.perspCorners.forEach((corner, idx) => {
+        const screenCorner = imgToScreen(corner.x, corner.y);
+        const dist = Math.hypot(screenCorner.x - p.screenX, screenCorner.y - p.screenY);
+        if (dist < touchRadiusScreen && dist < minDistance) {
+          minDistance = dist;
+          closestIdx = idx;
+        }
+      });
+
+      if (closestIdx !== -1) {
+        appState.activePerspCornerIdx = closestIdx;
+      } else {
+        // Snap closest corner directly to tap
+        let nearestCorner = 0;
+        let lowestDist = Infinity;
+        appState.perspCorners.forEach((c, idx) => {
+          const sc = imgToScreen(c.x, c.y);
+          const d = Math.hypot(sc.x - p.screenX, sc.y - p.screenY);
+          if (d < lowestDist) {
+            lowestDist = d;
+            nearestCorner = idx;
+          }
+        });
+        appState.activePerspCornerIdx = nearestCorner;
+        const img = appState.activeImgObj;
+        appState.perspCorners[nearestCorner] = {
+          x: Math.max(0, Math.min(img.naturalWidth, p.imgX)),
+          y: Math.max(0, Math.min(img.naturalHeight, p.imgY))
+        };
+      }
+
+      drawActiveCropOverlay();
+      renderMagnifierLoupe(p.clientX, p.clientY, appState.perspCorners[appState.activePerspCornerIdx]);
+    }
+
+    function handlePerspectivePointerMove(p) {
+      if (appState.activePerspCornerIdx === -1) return;
+
+      const img = appState.activeImgObj;
+      const clampedX = Math.max(0, Math.min(img.naturalWidth, p.imgX));
+      const clampedY = Math.max(0, Math.min(img.naturalHeight, p.imgY));
+
+      appState.perspCorners[appState.activePerspCornerIdx] = { x: clampedX, y: clampedY };
+      drawActiveCropOverlay();
+      renderMagnifierLoupe(p.clientX, p.clientY, { x: clampedX, y: clampedY });
+    }
+
+    function renderMagnifierLoupe(clientX, clientY, imgCoord) {
+      const img = appState.activeImgObj;
+      if (!img) return;
+
+      cornerLoupe.classList.remove('hidden');
+
+      let targetX = clientX - 56;
+      let targetY = clientY - 140;
+
+      if (targetY < 50) targetY = clientY + 50;
+      if (targetX < 10) targetX = 10;
+      if (targetX > window.innerWidth - 120) targetX = window.innerWidth - 120;
+
+      cornerLoupe.style.left = `${targetX}px`;
+      cornerLoupe.style.top = `${targetY}px`;
+
+      loupeCanvas.width = 112;
+      loupeCanvas.height = 112;
+      loupeCtx.clearRect(0, 0, 112, 112);
+
+      const zoom = 2.4;
+      const w = 112 / zoom;
+      const h = 112 / zoom;
+
+      loupeCtx.drawImage(
+        img,
+        imgCoord.x - w / 2,
+        imgCoord.y - h / 2,
+        w,
+        h,
+        0,
+        0,
+        112,
+        112
+      );
+    }
+
+
+    /* =========================================================================
+       EXECUTE CROPPING (SWITCHES AUTOMATICALLY ON IS_PERSPECTIVE_MODE)
+    ========================================================================= */
+    function executeActiveCrop() {
+      if (appState.isPerspectiveMode) {
+        executePerspectiveWarp();
+      } else {
+        executeNormalCrop();
+      }
+    }
+
+    // 1. STANDARD NORMAL CROP
+    function executeNormalCrop() {
+      const srcImg = appState.activeImgObj;
+      if (!srcImg) return;
+
+      const b = appState.normalBox;
+      const rx = Math.max(0, Math.round(b.x));
+      const ry = Math.max(0, Math.round(b.y));
+      const rw = Math.min(srcImg.naturalWidth - rx, Math.round(b.w));
+      const rh = Math.min(srcImg.naturalHeight - ry, Math.round(b.h));
+
+      if (rw <= 10 || rh <= 10) {
+        showToast('क्रॉप क्षेत्र बहुत छोटा है', 'error');
+        return;
+      }
+
+      const cropCanvas = document.createElement('canvas');
+      cropCanvas.width = rw;
+      cropCanvas.height = rh;
+      const ctx = cropCanvas.getContext('2d');
+      ctx.drawImage(srcImg, rx, ry, rw, rh, 0, 0, rw, rh);
+
+      const croppedUrl = cropCanvas.toDataURL('image/jpeg', 0.95);
+      applyCroppedUrlToTarget(croppedUrl);
+      closeCropModal();
+      showToast('फोटो सामान्य रूप से क्रॉप हो गई!');
+    }
+
+    // 2. PHOTOSHOP PERSPECTIVE HOMOGRAPHY WARP
+    function computeHomography(src, dst) {
+      const A = [];
+      for (let i = 0; i < 4; i++) {
+        const sx = src[i].x, sy = src[i].y;
+        const dx = dst[i].x, dy = dst[i].y;
+        A.push([sx, sy, 1, 0, 0, 0, -dx * sx, -dx * sy, dx]);
+        A.push([0, 0, 0, sx, sy, 1, -dy * sx, -dy * sy, dy]);
+      }
+
+      const n = 8;
+      for (let i = 0; i < n; i++) {
+        let maxRow = i;
+        for (let j = i + 1; j < n; j++) {
+          if (Math.abs(A[j][i]) > Math.abs(A[maxRow][i])) maxRow = j;
+        }
+        const temp = A[i];
+        A[i] = A[maxRow];
+        A[maxRow] = temp;
+
+        for (let j = i + 1; j < n; j++) {
+          const factor = A[j][i] / A[i][i];
+          for (let k = i; k <= n; k++) {
+            A[j][k] -= factor * A[i][k];
+          }
+        }
+      }
+
+      const h = new Array(8);
+      for (let i = n - 1; i >= 0; i--) {
+        let sum = A[i][n];
+        for (let j = i + 1; j < n; j++) {
+          sum -= A[i][j] * h[j];
+        }
+        h[i] = sum / A[i][i];
+      }
+
+      return [
+        h[0], h[1], h[2],
+        h[3], h[4], h[5],
+        h[6], h[7], 1
+      ];
+    }
+
+    function executePerspectiveWarp() {
+      const srcImg = appState.activeImgObj;
+      if (!srcImg) return;
+
+      const corners = appState.perspCorners;
+      const topLen = Math.hypot(corners[1].x - corners[0].x, corners[1].y - corners[0].y);
+      const botLen = Math.hypot(corners[2].x - corners[3].x, corners[2].y - corners[3].y);
+      const lftLen = Math.hypot(corners[3].x - corners[0].x, corners[3].y - corners[0].y);
+      const rgtLen = Math.hypot(corners[2].x - corners[1].x, corners[2].y - corners[1].y);
+
+      let outW = Math.round(Math.max(topLen, botLen));
+      let outH = Math.round(Math.max(lftLen, rgtLen));
+
+      if (appState.cropRatio === 'idcard') {
+        outH = Math.round(outW / (85.6 / 54));
+      } else if (appState.cropRatio === 'a4') {
+        outH = Math.round(outW * 1.414);
+      } else if (appState.cropRatio === '1:1') {
+        const side = Math.max(outW, outH);
+        outW = side;
+        outH = side;
+      } else if (appState.cropRatio === '4:3') {
+        outH = Math.round(outW * (3 / 4));
+      }
+
+      const maxRes = 2200;
+      if (outW > maxRes || outH > maxRes) {
+        const s = maxRes / Math.max(outW, outH);
+        outW = Math.round(outW * s);
+        outH = Math.round(outH * s);
+      }
+
+      const dstCorners = [
+        { x: 0, y: 0 },
+        { x: outW, y: 0 },
+        { x: outW, y: outH },
+        { x: 0, y: outH }
+      ];
+
+      const H = computeHomography(dstCorners, corners);
+      if (!H) {
+        showToast('कोनों की गणना में त्रुटि आई', 'error');
+        return;
+      }
+
+      const srcCanvas = document.createElement('canvas');
+      srcCanvas.width = srcImg.naturalWidth;
+      srcCanvas.height = srcImg.naturalHeight;
+      const sCtx = srcCanvas.getContext('2d');
+      sCtx.drawImage(srcImg, 0, 0);
+
+      const srcData = sCtx.getImageData(0, 0, srcCanvas.width, srcCanvas.height);
+      const srcPx = srcData.data;
+      const sw = srcCanvas.width;
+      const sh = srcCanvas.height;
+
+      const outCanvas = document.createElement('canvas');
+      outCanvas.width = outW;
+      outCanvas.height = outH;
+      const oCtx = outCanvas.getContext('2d');
+      const outData = oCtx.createImageData(outW, outH);
+      const outPx = outData.data;
+
+      let idx = 0;
+      for (let y = 0; y < outH; y++) {
+        for (let x = 0; x < outW; x++) {
+          const w = H[6] * x + H[7] * y + H[8];
+          const sx = (H[0] * x + H[1] * y + H[2]) / w;
+          const sy = (H[3] * x + H[4] * y + H[5]) / w;
+
+          if (sx >= 0 && sx < sw - 1 && sy >= 0 && sy < sh - 1) {
+            const x0 = Math.floor(sx);
+            const y0 = Math.floor(sy);
+            const x1 = x0 + 1;
+            const y1 = y0 + 1;
+            const fx = sx - x0;
+            const fy = sy - y0;
+
+            const i00 = (y0 * sw + x0) * 4;
+            const i10 = (y0 * sw + x1) * 4;
+            const i01 = (y1 * sw + x0) * 4;
+            const i11 = (y1 * sw + x1) * 4;
+
+            for (let c = 0; c < 4; c++) {
+              const top = srcPx[i00 + c] * (1 - fx) + srcPx[i10 + c] * fx;
+              const bot = srcPx[i01 + c] * (1 - fx) + srcPx[i11 + c] * fx;
+              outPx[idx + c] = Math.round(top * (1 - fy) + bot * fy);
+            }
+          } else {
+            outPx[idx] = 255;
+            outPx[idx + 1] = 255;
+            outPx[idx + 2] = 255;
+            outPx[idx + 3] = 255;
+          }
+          idx += 4;
+        }
+      }
+
+      oCtx.putImageData(outData, 0, 0);
+      const warpedResultUrl = outCanvas.toDataURL('image/jpeg', 0.95);
+      applyCroppedUrlToTarget(warpedResultUrl);
+      closeCropModal();
+      showToast('फोटो सीधा (Deskew) और क्रॉप हो गया!');
+    }
+
+    function applyCroppedUrlToTarget(dataUrl) {
+      if (appState.cropTarget === 1) {
+        loadDataUrlIntoSlot(1, dataUrl);
+      } else if (appState.cropTarget === 2) {
+        loadDataUrlIntoSlot(2, dataUrl);
+      } else if (appState.cropTarget === 'merged') {
+        loadDataUrlIntoSlot(1, dataUrl);
+        clearSlot(2);
+      }
+    }
+
+    /* =========================================================================
+       PDF CONVERTER, PRINT & DOWNLOAD
+    ========================================================================= */
+    function openPdfModal() {
+      if (!appState.p1Image && !appState.p2Image) {
+        showToast('PDF के लिए पहले फोटो अपलोड करें', 'error');
+        return;
+      }
+      document.getElementById('pdfExportModal').classList.remove('hidden');
+    }
+
+    function closePdfModal() {
+      document.getElementById('pdfExportModal').classList.add('hidden');
+    }
+
+    function executePdfDownload() {
+      const { jsPDF } = window.jspdf;
+      if (!jsPDF) {
+        showToast('PDF टूल लोड हो रहा है, पुनः प्रयास करें', 'error');
+        return;
+      }
+
+      const formatChoice = document.getElementById('pdfPageFormat').value;
+      const orientChoice = document.querySelector('input[name="pdfPageOrient"]:checked').value;
+      const marginMm = parseInt(document.getElementById('pdfPageMargin').value, 10);
+
+      let docFormat = 'a4';
+      if (formatChoice === '4x6') {
+        docFormat = [101.6, 152.4]; // 4x6 inches
+      } else if (formatChoice === 'letter') {
+        docFormat = 'letter';
+      }
+
+      const pdf = new jsPDF({
+        orientation: orientChoice,
+        unit: 'mm',
+        format: docFormat,
+        compress: true
+      });
+
+      const pW = pdf.internal.pageSize.getWidth();
+      const pH = pdf.internal.pageSize.getHeight();
+
+      const availW = pW - marginMm * 2;
+      const availH = pH - marginMm * 2;
+
+      const cW = outputMergeCanvas.width;
+      const cH = outputMergeCanvas.height;
+
+      const canvasRatio = cW / cH;
+      const pageRatio = availW / availH;
+
+      let drawW, drawH;
+      if (canvasRatio > pageRatio) {
+        drawW = availW;
+        drawH = availW / canvasRatio;
+      } else {
+        drawH = availH;
+        drawW = availH * canvasRatio;
+      }
+
+      const x = marginMm + (availW - drawW) / 2;
+      const y = marginMm + (availH - drawH) / 2;
+
+      const imgData = outputMergeCanvas.toDataURL('image/jpeg', 0.95);
+      pdf.addImage(imgData, 'JPEG', x, y, drawW, drawH, undefined, 'FAST');
+      pdf.save(`दस्तावेज़_${Date.now()}.pdf`);
+
+      closePdfModal();
+      showToast('PDF सफलतापूर्वक डाउनलोड हो गई!');
+    }
+
+    function triggerDirectPrint() {
+      if (!appState.p1Image && !appState.p2Image) {
+        showToast('प्रिंट के लिए पहले फोटो लोड करें', 'error');
+        return;
+      }
+
+      const printImg = document.getElementById('printDisplayImg');
+      const printBox = document.getElementById('printContainer');
+      printImg.src = outputMergeCanvas.toDataURL('image/png', 1.0);
+      printBox.classList.remove('hidden');
+
+      setTimeout(() => {
+        window.print();
+      }, 250);
+    }
+
+    function downloadMergedImage(format = 'jpg') {
+      if (!appState.p1Image && !appState.p2Image) {
+        showToast('डाउनलोड के लिए फोटो लोड करें', 'error');
+        return;
+      }
+
+      const mime = (format === 'png') ? 'image/png' : 'image/jpeg';
+      const ext = (format === 'png') ? 'png' : 'jpg';
+
+      const a = document.createElement('a');
+      a.download = `मर्ज_फोटो_${Date.now()}.${ext}`;
+      a.href = outputMergeCanvas.toDataURL(mime, 0.95);
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+
+      showToast(`फोटो (${ext.toUpperCase()}) डाउनलोड हो गई`);
+    }
+
+    let toastTimer;
+    function showToast(msg, type = 'success') {
+      const toast = document.getElementById('toastNotification');
+      const msgEl = document.getElementById('toastMessage');
+      const iconEl = document.getElementById('toastIcon');
+
+      clearTimeout(toastTimer);
+      msgEl.innerText = msg;
+
+      if (type === 'error') {
+        iconEl.setAttribute('data-lucide', 'alert-circle');
+        iconEl.className = 'w-4 h-4 text-rose-400';
+      } else {
+        iconEl.setAttribute('data-lucide', 'check');
+        iconEl.className = 'w-4 h-4 text-emerald-400';
+      }
+      lucide.createIcons();
+
+      toast.classList.remove('opacity-0', 'pointer-events-none');
+      toast.classList.add('opacity-100');
+
+      toastTimer = setTimeout(() => {
+        toast.classList.remove('opacity-100');
+        toast.classList.add('opacity-0', 'pointer-events-none');
+      }, 2800);
+    }
+  </script>
+</body>
+</html>
